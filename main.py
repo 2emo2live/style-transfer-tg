@@ -3,7 +3,7 @@ from telegram_token import token
 from io import BytesIO
 from config import start, help
 from telegram import Update
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler
+from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 import logging
 
 model = StyleTransferModel()
@@ -14,20 +14,19 @@ async def send_prediction_on_photo(update: Update, context: ContextTypes.DEFAULT
     print("Got image from {}".format(chat_id))
 
     # получаем информацию о картинке
-    image_info = update.message.photo[-1]
-    image_file = context.bot.get_file(image_info)
+    image_file = await update.message.photo[-1].get_file()
 
     if chat_id in first_image_file:
 
         # первая картинка, которая к нам пришла станет content image, а вторая style image
         content_image_stream = BytesIO()
-        first_image_file[chat_id].download(out=content_image_stream)
+
+        await first_image_file[chat_id].download_to_memory(out=content_image_stream)
+
         del first_image_file[chat_id]
 
         style_image_stream = BytesIO()
-        image_file.download(out=style_image_stream)
-        #input_img = content_image_stream.clone()
-        #input_img = torch.randn(content_img.data.size(), device=device)
+        await image_file.download_to_memory(out=style_image_stream)
 
         output = model.transfer_style(content_img=content_image_stream, style_img=style_image_stream)
 
@@ -50,12 +49,5 @@ if __name__ == '__main__':
     app = ApplicationBuilder().token(token).build()
     app.add_handler(CommandHandler('start', start))
     app.add_handler(CommandHandler('help', help))
-    #TODO: доделать приём и обработку изображений для асинхронной версии
-#    app.add_handler(MessageHandler(MessageHandler.filters.attached, ))
+    app.add_handler(MessageHandler(filters.PHOTO, send_prediction_on_photo))
     app.run_polling()
-
-
-
-
-'''    updater = Updater(token=token,  request_kwargs={'proxy_url': 'socks4://23.252.66.25:54321'})
-    updater.dispatcher.add_handler(MessageHandler(MessageHandler.filters.photo, send_prediction_on_photo))'''

@@ -1,3 +1,4 @@
+import torchvision.transforms
 from PIL import Image
 import torch
 import torch.nn as nn
@@ -5,7 +6,6 @@ import torch.nn.functional as F
 import torch.optim as optim
 import torchvision.transforms as transforms
 import torchvision.models as models
-from scipy import misc
 import copy
 
 def gram_matrix(input):
@@ -51,10 +51,9 @@ class StyleTransferModel:
     def __init__(self):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.cnn = models.vgg19(pretrained=True).features.to(self.device).eval()
-        self.imsize = 128
+        self.imsize = 256
 
     def _process_image(self, img_stream):
-        # TODO размер картинки, device и трансформации не меняются в течении всей работы модели,
         loader = transforms.Compose([
             transforms.Resize(self.imsize),
             transforms.CenterCrop(self.imsize),
@@ -120,11 +119,10 @@ class StyleTransferModel:
 
     def transfer_style(self, content_img, style_img, num_steps=500, style_weight=100000, content_weight=1):
         normalization_mean = torch.tensor([0.485, 0.456, 0.406]).to(self.device)
-        normalization_std = torch.tensor([0.229, 0.224, 0.225]).to(self.device),
+#        normalization_std = torch.tensor([0.229, 0.224, 0.225]).to(self.device),
 
         content_img=self._process_image(content_img)
         style_img = self._process_image(style_img)
-        #input_img = torch.randn(content_img.data.size(), device=self.device)
         input_img = content_img.clone()
 
         model, style_losses, content_losses = self._get_style_model_and_losses(normalization_mean, torch.tensor([0.229, 0.224, 0.225]).to(self.device), style_img, content_img)
@@ -161,4 +159,4 @@ class StyleTransferModel:
 
         input_img.data.clamp_(0, 1)
 
-        return misc.toimage(input_img.detach()[0])
+        return torchvision.transforms.ToPILImage()(input_img.detach()[0])
