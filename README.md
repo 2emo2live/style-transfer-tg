@@ -20,6 +20,12 @@
 token = 'YOUR_TOKEN'
 ```
 
+### 3. Проверьте зависимости
+- Python 3.8+
+- Библиотека [python-telegram-bot](https://github.com/python-telegram-bot/python-telegram-bot) 20.1+
+- Фреймворк [PyTorch](https://github.com/pytorch/pytorch) 2.0.0+
+    - [Torchvision](https://github.com/pytorch/vision) 0.15.0+
+
 ### 4. Запустите бота
 
 Вы можете запустить бота, выполнив следующую команду:
