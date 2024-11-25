@@ -5,9 +5,11 @@ from config import start, help
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 import logging
+from PIL import Image
 
 model = StyleTransferModel()
 first_image_file = {}
+
 
 async def send_prediction_on_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
@@ -16,7 +18,7 @@ async def send_prediction_on_photo(update: Update, context: ContextTypes.DEFAULT
     # получаем информацию о картинке
     image_file = await update.message.photo[-1].get_file()
 
-    if chat_id in first_image_file:
+    if chat_id in first_image_file.keys():
 
         # первая картинка, которая к нам пришла станет content image, а вторая style image
         content_image_stream = BytesIO()
@@ -28,11 +30,14 @@ async def send_prediction_on_photo(update: Update, context: ContextTypes.DEFAULT
         style_image_stream = BytesIO()
         await image_file.download_to_memory(out=style_image_stream)
 
-        output = model.transfer_style(content_img=content_image_stream, style_img=style_image_stream)
+        content_image = Image.open(content_image_stream)
+        style_image = Image.open(style_image_stream)
+        img_format = content_image.format
+        output = model.transfer_style(content_img=content_image, style_img=style_image)
 
         # теперь отправим назад фото
         output_stream = BytesIO()
-        output.save(output_stream, format='PNG')
+        output.save(output_stream, format=img_format)
         output_stream.seek(0)
         await context.bot.send_photo(chat_id, photo=output_stream)
         print("Sent Photo to user")

@@ -1,5 +1,4 @@
 import torchvision.transforms
-from PIL import Image
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -7,6 +6,7 @@ import torch.optim as optim
 import torchvision.transforms as transforms
 import torchvision.models as models
 import copy
+from PIL import Image
 
 def gram_matrix(input):
     batch_size, h, w, f_map_num = input.size()
@@ -18,7 +18,7 @@ def gram_matrix(input):
 
 class ContentLoss(nn.Module):
 
-    def __init__(self, target, ):
+    def __init__(self, target):
         super(ContentLoss, self).__init__()
         self.target = target.detach()
         self.loss = F.mse_loss(self.target, self.target)
@@ -48,19 +48,19 @@ class Normalization(nn.Module):
         return (img - self.mean) / self.std
 
 class StyleTransferModel:
-    def __init__(self):
+    def __init__(self, imsize=256):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.cnn = models.vgg19(pretrained=True).features.to(self.device).eval()
-        self.imsize = 256
+        self.imsize = imsize
 
-    def _process_image(self, img_stream):
+    def _process_image(self, img):
         loader = transforms.Compose([
             transforms.Resize(self.imsize),
             transforms.CenterCrop(self.imsize),
             transforms.ToTensor()])
 
-        image = Image.open(img_stream)
-        image = loader(image).unsqueeze(0)
+        #image = Image.open(img)
+        image = loader(img).unsqueeze(0)
         return image.to(self.device, torch.float)
 
 
@@ -121,7 +121,7 @@ class StyleTransferModel:
         normalization_mean = torch.tensor([0.485, 0.456, 0.406]).to(self.device)
 #        normalization_std = torch.tensor([0.229, 0.224, 0.225]).to(self.device),
 
-        content_img=self._process_image(content_img)
+        content_img = self._process_image(content_img)
         style_img = self._process_image(style_img)
         input_img = content_img.clone()
 
@@ -160,3 +160,17 @@ class StyleTransferModel:
         input_img.data.clamp_(0, 1)
 
         return torchvision.transforms.ToPILImage()(input_img.detach()[0])
+
+
+def process(content_image_path, style_image_path, size=256, result_path=None):
+    model = StyleTransferModel(size)
+
+    content_image = Image.open(content_image_path)
+    style_image = Image.open(style_image_path)
+
+    output = model.transfer_style(content_img=content_image, style_img=style_image)
+
+    if result_path is not None:
+        output.save(result_path, format=content_image.format)
+
+    return output
