@@ -48,9 +48,23 @@ class Normalization(nn.Module):
         return (img - self.mean) / self.std
 
 class StyleTransferModel:
-    def __init__(self, imsize=256):
+    def __init__(self, imsize=256, model_name='vgg_19'):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.cnn = models.vgg19(pretrained=True).features.to(self.device).eval()
+        if model_name == 'vgg_19':
+            self.cnn = models.vgg19(pretrained=True).features.to(self.device).eval()
+            self.content_layers = ['conv_4']
+            self.style_layers = ['conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5', 'conv_6', 'conv_7']
+        elif model_name == 'alexnet':
+            self.cnn = models.alexnet(weights=models.AlexNet_Weights.DEFAULT).to(self.device).eval()
+            self.content_layers = ['conv_4']
+            self.style_layers = ['conv_3', 'conv_4', 'conv_5']
+        elif model_name == 'vgg_fast':
+            self.cnn = models.vgg19(pretrained=True).features.to(self.device).eval()
+            self.content_layers = ['conv_1']
+            self.style_layers = ['conv_1', 'conv_3']
+        else:
+            raise RuntimeError()
+
         self.imsize = imsize
 
     def _process_image(self, img):
@@ -65,9 +79,7 @@ class StyleTransferModel:
 
 
     def _get_style_model_and_losses(self, normalization_mean, normalization_std,
-                                   style_img, content_img,
-                                   content_layers=['conv_4'],
-                                   style_layers=['conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5']):
+                                   style_img, content_img,):
         cnn = copy.deepcopy(self.cnn)
 
         normalization = Normalization(normalization_mean, normalization_std).to(self.device)
@@ -78,7 +90,7 @@ class StyleTransferModel:
         model = nn.Sequential(normalization)
 
         i = 0
-        for layer in cnn.children():
+        for layer in cnn.modules():
             if isinstance(layer, nn.Conv2d):
                 i += 1
                 name = 'conv_{}'.format(i)
@@ -86,21 +98,29 @@ class StyleTransferModel:
                 name = 'relu_{}'.format(i)
                 layer = nn.ReLU(inplace=False)
             elif isinstance(layer, nn.MaxPool2d):
-                name = 'pool_{}'.format(i)
+                name = 'mpool_{}'.format(i)
             elif isinstance(layer, nn.BatchNorm2d):
                 name = 'bn_{}'.format(i)
+            elif isinstance(layer, nn.Hardswish):
+                name = 'hs_{}'.format(i)
+                layer = nn.Hardswish(inplace=False)
+            elif isinstance(layer, nn.AdaptiveAvgPool2d):
+                name = 'apool_{}'.format(i)
+            elif isinstance(layer, nn.Hardsigmoid):
+                name = 'hsig_{}'.format(i)
+                layer = nn.Hardsigmoid(inplace=False)
             else:
-                raise RuntimeError('Unrecognized layer: {}'.format(layer.__class__.__name__))
+                continue
 
             model.add_module(name, layer)
 
-            if name in content_layers:
+            if name in self.content_layers:
                 target = model(content_img).detach()
                 content_loss = ContentLoss(target)
                 model.add_module("content_loss_{}".format(i), content_loss)
                 content_losses.append(content_loss)
 
-            if name in style_layers:
+            if name in self.style_layers:
                 target_feature = model(style_img).detach()
                 style_loss = StyleLoss(target_feature)
                 model.add_module("style_loss_{}".format(i), style_loss)
@@ -162,8 +182,9 @@ class StyleTransferModel:
         return torchvision.transforms.ToPILImage()(input_img.detach()[0])
 
 
-def process(content_image_path, style_image_path, size=256, result_path=None):
-    model = StyleTransferModel(size)
+def process(content_image_path, style_image_path, model_name='vgg19', size=256, result_path=None):
+
+    model = StyleTransferModel(size, model_name=model_name)
 
     content_image = Image.open(content_image_path)
     style_image = Image.open(style_image_path)
