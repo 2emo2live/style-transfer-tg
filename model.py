@@ -7,6 +7,7 @@ import torchvision.transforms as transforms
 import torchvision.models as models
 import copy
 from PIL import Image
+import math
 
 def gram_matrix(input):
     batch_size, h, w, f_map_num = input.size()
@@ -48,20 +49,19 @@ class Normalization(nn.Module):
         return (img - self.mean) / self.std
 
 class StyleTransferModel:
-    def __init__(self, imsize=256, model_name='vgg_19'):
+    def __init__(self, imsize=256, model_name='vgg', coef=0.0):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        if model_name == 'vgg_19':
+        if model_name == 'vgg':
             self.cnn = models.vgg19(pretrained=True).features.to(self.device).eval()
             self.content_layers = ['conv_4']
-            self.style_layers = ['conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5', 'conv_6', 'conv_7']
+            self.style_layers = ['conv_1', 'conv_2', 'conv_3', 'conv_4', 'conv_5', 'conv_6', 'conv_7', 'conv_8',
+                                 'conv_9', 'conv_10', 'conv_11', 'conv_12', 'conv_13', 'conv_14', 'conv_15', 'conv_16']
+            if coef < 1:
+                self.style_layers = self.style_layers[:4 + math.floor(11 * coef)]
         elif model_name == 'alexnet':
             self.cnn = models.alexnet(weights=models.AlexNet_Weights.DEFAULT).to(self.device).eval()
             self.content_layers = ['conv_4']
             self.style_layers = ['conv_3', 'conv_4', 'conv_5']
-        elif model_name == 'vgg_fast':
-            self.cnn = models.vgg19(pretrained=True).features.to(self.device).eval()
-            self.content_layers = ['conv_1']
-            self.style_layers = ['conv_1', 'conv_3']
         else:
             raise RuntimeError()
 
